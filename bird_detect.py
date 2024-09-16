@@ -3,8 +3,9 @@ import cv2
 import torch
 from concurrent.futures import ProcessPoolExecutor
 import numpy as np
+from pathlib import Path
 
-FILE_NAME = 'footage/bird_footage.mp4'
+FILE_NAME = 'footage/20230704_062122.MOV'
 GPU_COUNT = torch.cuda.device_count()
 
 def process_video(gpu_num, file_name, start_index, stop_index):
@@ -65,6 +66,11 @@ def total_video_frames(file_name):
     '''
 
     cap = cv2.VideoCapture(file_name)
+
+    # Check if opened successfully
+    if not cap.isOpened():
+        raise Exception(f"Error opening file {file_name}")
+        
     return int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
 def calculate_clip_bounds(batches, padding=90):
@@ -133,12 +139,16 @@ def read_and_write_clips(file_name, clips, output_dir):
     # Get FPS of video
     fps = int(cap.get(cv2.CAP_PROP_FPS))
 
+    # Create output folder if it doesn't exist
+    output = Path(output_dir)
+    output.mkdir(exist_ok=True)
+
     # Loop through clips
     for i in range(len(clips)):
         # Write to MP4 format
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         # Create new video writer for clip
-        video = cv2.VideoWriter(f'{output_dir}/{i}.mp4', fourcc, fps, frame_size)
+        video = cv2.VideoWriter(str(output / f'{i}.mp4'), fourcc, fps, frame_size)
 
         # Set the current read frame to the start index of the clip
         cap.set(cv2.CAP_PROP_POS_FRAMES, clips[i][0] - 1)
