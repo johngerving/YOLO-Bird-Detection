@@ -2,7 +2,7 @@ from ultralytics import YOLO
 import cv2
 import torch
 from concurrent.futures import ProcessPoolExecutor
-from PIL import Image
+import numpy as np
 
 FILE_NAME = 'footage/bird_footage.mp4'
 GPU_COUNT = torch.cuda.device_count()
@@ -33,6 +33,9 @@ def process_video(gpu_num, file_name, start_index, stop_index):
     # Set the frame index to read from
     cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number - 1)
 
+    # Create numpy array with detections from each frame
+    detections = np.full(stop_index - start_index, False, dtype=bool)
+
     # Read frames in video
     while frame_number < stop_index and cap.isOpened():
         ret, frame = cap.read()
@@ -41,10 +44,17 @@ def process_video(gpu_num, file_name, start_index, stop_index):
 
         # Run inference
         results = model.predict(frame, device=device, verbose=False)
-        
-        print(results[0].boxes.cls.size(dim=0))
+
+        # Check if an object was detected in the frame
+        object_detected = results[0].boxes.cls.size(dim=0) > 0
+        # If it was, set the detection value to true
+        if object_detected:
+            detections[frame_number - start_index] = True   
             
         frame_number += 1
+
+    print(detections)
+    return detections
         
 
 def total_video_frames(file_name):
