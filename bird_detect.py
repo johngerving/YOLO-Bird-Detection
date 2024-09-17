@@ -213,7 +213,7 @@ def main():
 
     num_batches = batch_num
         
-    with ProcessPoolExecutor(max_workers=num_batches) as executor:
+    with ProcessPoolExecutor(max_workers=8) as executor:
         frame_detections = executor.map(process_video, devices, file_names, start_indices, end_indices)
 
         clips = calculate_clip_bounds(frame_detections)
