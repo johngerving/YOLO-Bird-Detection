@@ -130,7 +130,7 @@ def read_and_write_clips(file_name, clips, output_dir):
 
     # Check if opened successfully
     if cap.isOpened() == False:
-        raise Exception("Error opening video file")
+        raise Exception(f"Error opening video file {file_name}")
 
     # Get width and height of frame
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -217,12 +217,12 @@ def main():
     
         num_batches = batch_num
             
-        with ProcessPoolExecutor(max_workers=8) as executor:
+        with ProcessPoolExecutor(max_workers=32) as executor:
             frame_detections = executor.map(process_video, devices, file_names, start_indices, end_indices)
     
             clips = calculate_clip_bounds(frame_detections)
-            print(f"Writing to output/{file.stem}}.mp4")
-            read_and_write_clips(file.stem + ".mp4", clips, "output")
+            print(f"Writing to output/{file.stem}.mp4")
+            read_and_write_clips(str(file), clips, "output")
 
 if __name__ == '__main__':
     main()
