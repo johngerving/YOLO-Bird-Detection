@@ -5,7 +5,7 @@ from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 from pathlib import Path
 
-FILE_NAME = 'footage/20230704_062122.MOV'
+FOLDER = 'footage'
 GPU_COUNT = torch.cuda.device_count()
 
 def process_video(gpu_num, file_name, start_index, stop_index):
@@ -179,45 +179,50 @@ def main():
         print("Error: No GPUs found on system.")
         exit(1)
 
-    devices = []
-    file_names = []
-    start_indices = []
-    end_indices = []
-    # Get the number of frames in the video
-    num_frames = total_video_frames(FILE_NAME)
+    dir = Path(FOLDER)
 
-    # Split up the frames between the GPU
-    batch_size = 1024 # num_frames // GPU_COUNT
-    start = 0
-    end = 0
-
-    batch_num = 0
-    while end < num_frames:
-        # Add the batch size to the current end index
-        end = start + batch_size
-
-        # Extend to the end of the frame count if the next batch won't be a full batch
-        if(end + batch_size > num_frames):
-            end = num_frames
-
-        # Add arguments for batch to list
-        devices.append(batch_num % GPU_COUNT)
-        file_names.append(FILE_NAME)
-        start_indices.append(start)
-        end_indices.append(end)
-
-        # Set the start for the next loop
-        start = end
-
-        batch_num += 1
-
-    num_batches = batch_num
-        
-    with ProcessPoolExecutor(max_workers=8) as executor:
-        frame_detections = executor.map(process_video, devices, file_names, start_indices, end_indices)
-
-        clips = calculate_clip_bounds(frame_detections)
-        read_and_write_clips(FILE_NAME, clips, "output")
+    for file in dir.glob('**/*.MOV'):
+        print(f"Processing {str(file)}")
+        devices = []
+        file_names = []
+        start_indices = []
+        end_indices = []
+        # Get the number of frames in the video
+        num_frames = total_video_frames(str(file))
+    
+        # Split up the frames between the GPU
+        batch_size = 1024 # num_frames // GPU_COUNT
+        start = 0
+        end = 0
+    
+        batch_num = 0
+        while end < num_frames:
+            # Add the batch size to the current end index
+            end = start + batch_size
+    
+            # Extend to the end of the frame count if the next batch won't be a full batch
+            if(end + batch_size > num_frames):
+                end = num_frames
+    
+            # Add arguments for batch to list
+            devices.append(batch_num % GPU_COUNT)
+            file_names.append(str(file))
+            start_indices.append(start)
+            end_indices.append(end)
+    
+            # Set the start for the next loop
+            start = end
+    
+            batch_num += 1
+    
+        num_batches = batch_num
+            
+        with ProcessPoolExecutor(max_workers=8) as executor:
+            frame_detections = executor.map(process_video, devices, file_names, start_indices, end_indices)
+    
+            clips = calculate_clip_bounds(frame_detections)
+            print(f"Writing to output/{file.stem}}.mp4")
+            read_and_write_clips(file.stem + ".mp4", clips, "output")
 
 if __name__ == '__main__':
     main()
