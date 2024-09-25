@@ -73,10 +73,11 @@ def total_video_frames(file_name):
         
     return int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-def calculate_clip_bounds(batches, padding=90):
+def calculate_clip_bounds(batches, num_frames, padding=90):
     '''Calculates the start and end indices of the clips where detections occurred.
 
     :param batches: A generator object, with each entry containing a NumPy boolean array, each entry corresponding to a frame and True representing a detection occurring.
+    :param num_frames: The total number of frames in the video.
     :param padding: The number of frames before and after the detection to include as padding in the clips.
 
     :return: A two-dimensional list, with each element having two elements representing the start and end frame index of a clip. 
@@ -115,6 +116,9 @@ def calculate_clip_bounds(batches, padding=90):
                     frames_since_last_detection = 0
 
             frame_index += 1
+
+    if len(clips[-1]) < 2:
+        clips[-1].append(num_frames - 1)
 
     return clips
 
@@ -219,8 +223,8 @@ def main():
             
         with ProcessPoolExecutor(max_workers=32) as executor:
             frame_detections = executor.map(process_video, devices, file_names, start_indices, end_indices)
-    
-            clips = calculate_clip_bounds(frame_detections)
+
+            clips = calculate_clip_bounds(frame_detections, num_frames)
             print(f"Writing to output/{file.stem}")
             read_and_write_clips(str(file), clips, f"output/{file.stem}")
 
