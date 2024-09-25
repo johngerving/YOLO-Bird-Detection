@@ -141,7 +141,7 @@ def read_and_write_clips(file_name, clips, output_dir):
 
     # Create output folder if it doesn't exist
     output = Path(output_dir)
-    output.mkdir(exist_ok=True)
+    output.mkdir(parents=True, exist_ok=True)
 
     # Loop through clips
     for i in range(len(clips)):
@@ -221,8 +221,8 @@ def main():
             frame_detections = executor.map(process_video, devices, file_names, start_indices, end_indices)
     
             clips = calculate_clip_bounds(frame_detections)
-            print(f"Writing to output/{file.stem}.mp4")
-            read_and_write_clips(str(file), clips, "output")
+            print(f"Writing to output/{file.stem}")
+            read_and_write_clips(str(file), clips, f"output/{file.stem}")
 
 if __name__ == '__main__':
     main()
