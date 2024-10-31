@@ -2,6 +2,8 @@ from ultralytics import YOLO
 import cv2
 import torch
 from concurrent.futures import ProcessPoolExecutor
+import threading
+import queue
 import numpy as np
 from pathlib import Path
 
@@ -191,6 +193,24 @@ def read_and_write_clips(file_name, clips, output_dir):
         video.release()
 
     cap.release()
+
+q = queue.Queue()
+
+def file_writer():
+    '''
+    A worker queue for writing video clips to the disk.
+    '''
+
+    while True:
+        # Get latest item from queue
+        item = q.get()
+
+        # Write file to queue
+        print(f"Writing to output/{item['file'].stem}")
+        read_and_write_clips(str(item['file']), item['clips'], f"output/{item['file'].stem}")
+        print(f"Finished writing output/{item['file'].stem}")
+
+        q.task_done()
     
 
 def main():
@@ -199,6 +219,9 @@ def main():
         exit(1)
 
     dir = Path(FOLDER)
+
+    # Create worker thread
+    threading.Thread(target=file_writer, daemon=True).start()
 
     for file in dir.glob('**/*.MOV'):
         print(f"Processing {str(file)}")
@@ -242,8 +265,18 @@ def main():
             frame_detections = executor.map(process_video, devices, file_names, start_indices, end_indices, filters)
 
             clips = calculate_clip_bounds(frame_detections, num_frames)
-            print(f"Writing to output/{file.stem}")
-            read_and_write_clips(str(file), clips, f"output/{file.stem}")
+
+            print(f"Finished processing {file}")
+
+            # Send clip information to queue
+            q.put({
+                "file": file,
+                "clips": clips,
+            })
+
+    q.join()
+    print("Done.")
+            
 
 if __name__ == '__main__':
     main()
