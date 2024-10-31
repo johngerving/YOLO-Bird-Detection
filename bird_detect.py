@@ -8,19 +8,28 @@ from pathlib import Path
 FOLDER = 'footage'
 GPU_COUNT = torch.cuda.device_count()
 
-def process_video(gpu_num, file_name, start_index, stop_index):
+def process_video(gpu_num, file_name, start_index, stop_index, filters=None):
     '''Processes a subset of frames in a video.
 
     :param gpu_num: The index of the CUDA device to run inference on.
     :param file_name: The path to the video to read from.
     :param start_index: The frame index to start from.
     :param stop_index: The frame index to stop at. The frames will be read up to, but not including, this index.
+    :param filters: A list of class names to filter. If none, all classes will be detected.
     '''
 
     # Initialize model and device to use for processing
     device = torch.device(f'cuda:{gpu_num}')
     model = YOLO('models/yolov10l.pt')
-    model.to(device)    
+    model.to(device)   
+
+    classes = None
+    if filters is not None:
+        classes_dict = model.names
+        classes = []
+
+        for name in filters:
+            classes.append(list(classes_dict.keys())[list(classes_dict.values()).index(name)])
 
     # Create a VideoCapture object and read from the file
     cap = cv2.VideoCapture(file_name)
@@ -41,16 +50,22 @@ def process_video(gpu_num, file_name, start_index, stop_index):
     while frame_number < stop_index and cap.isOpened():
         ret, frame = cap.read()
         if not ret:
-            raise exception(f'Error: Frame {frame_number} could not be read.')
+            raise Exception(f'Error: Frame {frame_number} could not be read.')
 
         # Run inference
-        results = model.predict(frame, device=device, verbose=False)
+        results = model.predict(frame, device=device, classes=classes, verbose=False)
 
         # Check if an object was detected in the frame
         object_detected = results[0].boxes.cls.size(dim=0) > 0
         # If it was, set the detection value to true
         if object_detected:
             detections[frame_number - start_index] = True   
+
+            # image = results[0].orig_img
+
+            # objects = []
+            # for cls in results[0].boxes.cls.cpu().detach().numpy():
+            #     objects.append(results[0].names[cls])
             
         frame_number += 1
 
@@ -191,6 +206,7 @@ def main():
         file_names = []
         start_indices = []
         end_indices = []
+        filters = []
         # Get the number of frames in the video
         num_frames = total_video_frames(str(file))
     
@@ -213,6 +229,7 @@ def main():
             file_names.append(str(file))
             start_indices.append(start)
             end_indices.append(end)
+            filters.append(['bird'])
     
             # Set the start for the next loop
             start = end
@@ -222,7 +239,7 @@ def main():
         num_batches = batch_num
             
         with ProcessPoolExecutor(max_workers=32) as executor:
-            frame_detections = executor.map(process_video, devices, file_names, start_indices, end_indices)
+            frame_detections = executor.map(process_video, devices, file_names, start_indices, end_indices, filters)
 
             clips = calculate_clip_bounds(frame_detections, num_frames)
             print(f"Writing to output/{file.stem}")
