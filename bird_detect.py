@@ -6,9 +6,19 @@ import threading
 import queue
 import numpy as np
 from pathlib import Path
+import sys
+import logging
 
 FOLDER = 'footage'
 GPU_COUNT = torch.cuda.device_count()
+
+log_formatter = logging.Formatter(
+    "%(asctime)s - %(levelname)s - %(message)s", 
+    style="%",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+
+logger = logging.getLogger()
 
 def process_video(gpu_num, file_name, start_index, stop_index, filters=None):
     '''Processes a subset of frames in a video.
@@ -52,7 +62,8 @@ def process_video(gpu_num, file_name, start_index, stop_index, filters=None):
     while frame_number < stop_index and cap.isOpened():
         ret, frame = cap.read()
         if not ret:
-            raise Exception(f'Error: Frame {frame_number} could not be read.')
+            logger.error(f'Frame {frame_number} number could not be read')
+            raise Exception(f'frame {frame_number} could not be read.')
 
         # Run inference
         results = model.predict(frame, device=device, classes=classes, verbose=False)
@@ -206,25 +217,72 @@ def file_writer():
         item = q.get()
 
         # Write file to queue
-        print(f"Writing to output/{item['file'].stem}")
+        logger.info(f"Writing to output/{item['file'].stem}")
         read_and_write_clips(str(item['file']), item['clips'], f"output/{item['file'].stem}")
-        print(f"Finished writing output/{item['file'].stem}")
+        logger.info(f"Finished writing output/{item['file'].stem}")
 
         q.task_done()
+
+def get_file_list(list_path):
+    '''
+    get_file_list returns a list of files given a path to a text file containing a path to a file on each line.
+
+    :param list_path: The path to a text file containing a path to a file on each line.
+    
+    :return: A list of Path objects
+    '''
+
+    files = []
+
+    with open(list_path) as f:
+        # Get each line
+        files_str = f.read().splitlines()
+
+        for file in files_str:
+            path = Path(file)
+
+            # Make sure path exists and isn't a directory
+            if path.exists() and not path.is_dir():
+                files.append(path)
+
+    return files
     
 
 def main():
+    logger.setLevel(logging.INFO)
+
+    file_log_handler = logging.FileHandler("bird_detect.log")
+    file_log_handler.setFormatter(log_formatter)
+
+    console_log_handler = logging.StreamHandler()
+    console_log_handler.setFormatter(log_formatter)
+
+    logger.addHandler(file_log_handler)
+    logger.addHandler(console_log_handler)
+
+    logger.info('Started')
+
     if GPU_COUNT < 1:
-        print("Error: No GPUs found on system.")
+        logger.error("No GPUs found on system.")
+        exit(1)
+    if len(sys.argv) < 2:
+        logger.error("Missing file list argument.")
         exit(1)
 
-    dir = Path(FOLDER)
+    # Get name of file with list of videos to process
+    f = Path(sys.argv[1])
+    if not f.exists() or f.is_dir():
+        logger.error(f"Invalid file {f}")
+        exit(1)
+
+    video_list = get_file_list(str(f))
+    logger.info(f"Processing videos: {', '.join(map(str, video_list))}")
 
     # Create worker thread
     threading.Thread(target=file_writer, daemon=True).start()
 
-    for file in dir.glob('**/*.MOV'):
-        print(f"Processing {str(file)}")
+    for file in video_list:
+        logger.info(f"Processing {str(file)}")
         devices = []
         file_names = []
         start_indices = []
@@ -266,7 +324,7 @@ def main():
 
             clips = calculate_clip_bounds(frame_detections, num_frames)
 
-            print(f"Finished processing {file}")
+            logger.info(f"Finished processing {file}")
 
             # Send clip information to queue
             q.put({
@@ -275,7 +333,7 @@ def main():
             })
 
     q.join()
-    print("Done.")
+    logger.info('Finished')
             
 
 if __name__ == '__main__':
