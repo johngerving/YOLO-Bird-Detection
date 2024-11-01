@@ -221,6 +221,14 @@ def file_writer():
         read_and_write_clips(str(item['file']), item['clips'], f"output/{item['file'].stem}")
         logger.info(f"Finished writing output/{item['file'].stem}")
 
+        # Delete original file
+        logger.info(f"Deleting {item['file']}")
+        try:
+            item['file'].unlink()
+            logger.info(f"Finished deleting {item['file']}")
+        except Exception as e:
+            logger.error(f"Could not delete {item['file']}: {e}")
+
         q.task_done()
 
 def get_file_list(list_path):
